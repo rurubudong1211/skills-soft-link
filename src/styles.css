@@ -1,0 +1,82 @@
+@import "./app-base.css";
+
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+.button:disabled,
+.icon-text-button:disabled,
+.forget-target-button:disabled {
+  opacity: 0.48;
+}
+
+.path-picker-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.path-picker-row .text-field {
+  min-width: 0;
+  flex: 1;
+}
+
+.path-picker-row .button {
+  flex: none;
+}
+
+.dialog--react {
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+}
+
+.dialog--react .dialog-body {
+  max-height: calc(100vh - 190px);
+  overflow-y: auto;
+}
+
+.compact-empty {
+  min-height: 92px;
+  padding: var(--space-4);
+}
+
+.compact-empty p {
+  margin: 0;
+}
+
+.inline-loading {
+  min-height: 64px;
+  display: grid;
+  place-items: center;
+  border-block: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.toast--danger {
+  background: var(--danger);
+  color: var(--bg);
+}
+
+.refresh-symbol.is-spinning {
+  animation: refresh-spin 700ms linear infinite;
+}
+
+@keyframes refresh-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+  .titlebar-note {
+    display: none;
+  }
+
+  .workspace {
+    grid-template-columns: 206px minmax(500px, 1fr);
+  }
+}
