@@ -1,6 +1,8 @@
 import {
+  CSSProperties,
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
   ReactNode,
   useCallback,
   useEffect,
@@ -26,6 +28,25 @@ const formatTime = () =>
     second: "2-digit",
     hour12: false,
   }).format(new Date());
+
+const DEFAULT_SOURCES_WIDTH = 244;
+const COLLAPSED_SOURCES_WIDTH = 52;
+const DEFAULT_DETAIL_WIDTH = 356;
+const MIN_SOURCES_WIDTH = 0;
+const MAX_SOURCES_WIDTH = 100_000;
+const MIN_DETAIL_WIDTH = 0;
+const MAX_DETAIL_WIDTH = 100_000;
+const RESIZER_WIDTH = 8;
+
+const clamp = (value: number, minimum: number, maximum: number) =>
+  Math.min(Math.max(value, minimum), maximum);
+
+const readPanelWidth = (key: string, fallback: number, minimum: number, maximum: number) => {
+  const storedValue = window.localStorage.getItem(key);
+  if (storedValue === null) return fallback;
+  const stored = Number(storedValue);
+  return Number.isFinite(stored) ? clamp(stored, minimum, maximum) : fallback;
+};
 
 const errorText = (error: unknown) =>
   error instanceof Error ? error.message : typeof error === "string" ? error : "操作失败，请重试";
@@ -135,8 +156,116 @@ export default function App() {
   const [browseTargetOpen, setBrowseTargetOpen] = useState(false);
   const [newTargetPath, setNewTargetPath] = useState("");
   const [toasts, setToasts] = useState<Array<{ id: number; message: string; tone: "default" | "danger" }>>([]);
+  const [sourcesWidth, setSourcesWidth] = useState(() =>
+    readPanelWidth("skills-soft-link:sources-width", DEFAULT_SOURCES_WIDTH, MIN_SOURCES_WIDTH, MAX_SOURCES_WIDTH),
+  );
+  const [sourcesCollapsed, setSourcesCollapsed] = useState(
+    () => window.localStorage.getItem("skills-soft-link:sources-collapsed") === "true",
+  );
+  const [detailWidth, setDetailWidth] = useState(() =>
+    readPanelWidth("skills-soft-link:detail-width", DEFAULT_DETAIL_WIDTH, MIN_DETAIL_WIDTH, MAX_DETAIL_WIDTH),
+  );
+  const [resizingPanel, setResizingPanel] = useState<"sources" | "detail" | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const resizeStartRef = useRef({ pointerX: 0, panelWidth: 0 });
+
+  const getPanelMaximum = useCallback((panel: "sources" | "detail") => {
+    const workspaceWidth = workspaceRef.current?.clientWidth ?? window.innerWidth;
+    const effectiveSourcesWidth = sourcesCollapsed ? COLLAPSED_SOURCES_WIDTH : sourcesWidth;
+    const visibleResizerCount = sourcesCollapsed ? 1 : 2;
+
+    if (panel === "sources") {
+      return Math.max(0, workspaceWidth - detailWidth - RESIZER_WIDTH * 2);
+    }
+
+    return Math.max(0, workspaceWidth - effectiveSourcesWidth - RESIZER_WIDTH * visibleResizerCount);
+  }, [detailWidth, sourcesCollapsed, sourcesWidth]);
+
+  const beginResize = (panel: "sources" | "detail", event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizeStartRef.current = {
+      pointerX: event.clientX,
+      panelWidth: panel === "sources" ? sourcesWidth : detailWidth,
+    };
+    setResizingPanel(panel);
+  };
+
+  const moveResize = (panel: "sources" | "detail", event: ReactPointerEvent<HTMLDivElement>) => {
+    if (resizingPanel !== panel) return;
+    const delta = event.clientX - resizeStartRef.current.pointerX;
+    if (panel === "sources") {
+      setSourcesWidth(clamp(resizeStartRef.current.panelWidth + delta, MIN_SOURCES_WIDTH, getPanelMaximum("sources")));
+    } else {
+      setDetailWidth(clamp(resizeStartRef.current.panelWidth - delta, MIN_DETAIL_WIDTH, getPanelMaximum("detail")));
+    }
+  };
+
+  const endResize = (panel: "sources" | "detail", event: ReactPointerEvent<HTMLDivElement>) => {
+    if (resizingPanel !== panel) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    setResizingPanel(null);
+  };
+
+  const resizeWithKeyboard = (panel: "sources" | "detail", event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+    event.preventDefault();
+    const direction = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+    const step = event.shiftKey ? 32 : 12;
+    const minimum = panel === "sources" ? MIN_SOURCES_WIDTH : MIN_DETAIL_WIDTH;
+    const maximum = getPanelMaximum(panel);
+    const current = panel === "sources" ? sourcesWidth : detailWidth;
+    const directionalDelta = panel === "sources" ? direction * step : -direction * step;
+    const next = event.key === "Home" ? minimum : event.key === "End" ? maximum : clamp(current + directionalDelta, minimum, maximum);
+    if (panel === "sources") setSourcesWidth(next);
+    else setDetailWidth(next);
+  };
+
+  useEffect(() => {
+    window.localStorage.setItem("skills-soft-link:sources-width", String(Math.round(sourcesWidth)));
+  }, [sourcesWidth]);
+
+  useEffect(() => {
+    window.localStorage.setItem("skills-soft-link:sources-collapsed", String(sourcesCollapsed));
+  }, [sourcesCollapsed]);
+
+  useEffect(() => {
+    window.localStorage.setItem("skills-soft-link:detail-width", String(Math.round(detailWidth)));
+  }, [detailWidth]);
+
+  useEffect(() => {
+    document.body.classList.toggle("is-resizing-panels", resizingPanel !== null);
+    return () => document.body.classList.remove("is-resizing-panels");
+  }, [resizingPanel]);
+
+  useEffect(() => {
+    const fitPanelsToWindow = () => {
+      const workspaceWidth = workspaceRef.current?.clientWidth ?? window.innerWidth;
+      const effectiveSourcesWidth = sourcesCollapsed ? COLLAPSED_SOURCES_WIDTH : sourcesWidth;
+      const visibleResizerCount = sourcesCollapsed ? 1 : 2;
+      const availableForSidePanels = Math.max(0, workspaceWidth - RESIZER_WIDTH * visibleResizerCount);
+      const nextDetailWidth = clamp(
+        detailWidth,
+        MIN_DETAIL_WIDTH,
+        Math.max(0, availableForSidePanels - (sourcesCollapsed ? COLLAPSED_SOURCES_WIDTH : 0)),
+      );
+      setDetailWidth(nextDetailWidth);
+      if (!sourcesCollapsed) {
+        setSourcesWidth(clamp(
+          effectiveSourcesWidth,
+          MIN_SOURCES_WIDTH,
+          Math.max(0, availableForSidePanels - nextDetailWidth),
+        ));
+      }
+    };
+
+    fitPanelsToWindow();
+    window.addEventListener("resize", fitPanelsToWindow);
+    return () => window.removeEventListener("resize", fitPanelsToWindow);
+  }, [detailWidth, sourcesCollapsed, sourcesWidth]);
 
   const showToast = useCallback((message: string, tone: "default" | "danger" = "default") => {
     const id = Date.now() + Math.random();
@@ -474,16 +603,66 @@ export default function App() {
         <span className="titlebar-note">本地磁盘 · 手动刷新</span>
       </header>
 
-      <div className="workspace">
-        <aside className="sources-panel" aria-label="源目录">
+      <div
+        ref={workspaceRef}
+        className={`workspace${sourcesCollapsed ? " is-sources-collapsed" : ""}${resizingPanel ? " is-resizing" : ""}`}
+        style={{
+          "--sources-width": `${sourcesCollapsed ? COLLAPSED_SOURCES_WIDTH : sourcesWidth}px`,
+          "--sources-divider-width": sourcesCollapsed ? "0px" : `${RESIZER_WIDTH}px`,
+          "--detail-width": `${detailWidth}px`,
+        } as CSSProperties}
+      >
+        <aside className={`sources-panel${sourcesCollapsed ? " is-collapsed" : ""}`} aria-label="源目录">
+          <div className="sources-collapsed" aria-label="已折叠的源目录">
+            <button
+              className="sources-expand-button"
+              type="button"
+              aria-label="展开源目录区域"
+              aria-expanded="false"
+              title="展开源目录"
+              onClick={() => setSourcesCollapsed(false)}
+            >
+              <span aria-hidden="true">›</span>
+            </button>
+            <nav className="collapsed-source-list" aria-label="快速切换源目录">
+              {sources.map((source) => (
+                <button
+                  className={`collapsed-source-button${source.id === currentSourceId ? " is-active" : ""}`}
+                  type="button"
+                  key={source.id}
+                  title={`${source.name}\n${source.path}`}
+                  aria-label={`切换到 ${source.name}`}
+                  aria-current={source.id === currentSourceId ? "page" : undefined}
+                  onClick={() => setCurrentSourceId(source.id)}
+                >
+                  {source.name.charAt(0).toUpperCase()}
+                </button>
+              ))}
+            </nav>
+          </div>
           <div className="panel-heading sources-heading">
             <div>
               <p className="panel-title">源目录</p>
               <p className="panel-caption">{loadingSources ? "正在读取…" : `${sources.length} 个源目录`}</p>
             </div>
-            <button className="icon-text-button" type="button" onClick={() => setAddSourceOpen(true)} aria-label="添加源目录">
-              <span aria-hidden="true">＋</span><span>添加</span>
-            </button>
+            <div className="sources-heading-actions">
+              <button className="icon-text-button" type="button" onClick={() => setAddSourceOpen(true)} aria-label="添加源目录">
+                <span aria-hidden="true">＋</span><span>添加</span>
+              </button>
+              <button
+                className="sources-collapse-button"
+                type="button"
+                aria-label="折叠源目录区域"
+                aria-expanded="true"
+                title="折叠源目录"
+                onClick={() => {
+                  setResizingPanel(null);
+                  setSourcesCollapsed(true);
+                }}
+              >
+                <span aria-hidden="true">‹</span>
+              </button>
+            </div>
           </div>
           <nav className="source-list" aria-label="已登记源目录">
             {sources.map((source) => (
@@ -541,6 +720,25 @@ export default function App() {
             <p>移出列表只会忘记路径，不会删除目录或软链接。</p>
           </div>
         </aside>
+
+        <div
+          className={`panel-resizer panel-resizer--sources${resizingPanel === "sources" ? " is-active" : ""}`}
+          role="separator"
+          aria-hidden={sourcesCollapsed}
+          aria-label="调整源目录区域宽度"
+          aria-orientation="vertical"
+          aria-valuemin={MIN_SOURCES_WIDTH}
+          aria-valuemax={getPanelMaximum("sources")}
+          aria-valuenow={Math.round(sourcesWidth)}
+          tabIndex={sourcesCollapsed ? -1 : 0}
+          title="拖动调整宽度，双击恢复默认"
+          onPointerDown={(event) => beginResize("sources", event)}
+          onPointerMove={(event) => moveResize("sources", event)}
+          onPointerUp={(event) => endResize("sources", event)}
+          onPointerCancel={(event) => endResize("sources", event)}
+          onKeyDown={(event) => resizeWithKeyboard("sources", event)}
+          onDoubleClick={() => setSourcesWidth(DEFAULT_SOURCES_WIDTH)}
+        />
 
         <main className="content-panel">
           <header className="content-header">
@@ -631,6 +829,24 @@ export default function App() {
             </div>
           </section>
         </main>
+
+        <div
+          className={`panel-resizer panel-resizer--detail${resizingPanel === "detail" ? " is-active" : ""}`}
+          role="separator"
+          aria-label="调整连接详情区域宽度"
+          aria-orientation="vertical"
+          aria-valuemin={MIN_DETAIL_WIDTH}
+          aria-valuemax={getPanelMaximum("detail")}
+          aria-valuenow={Math.round(detailWidth)}
+          tabIndex={0}
+          title="拖动调整宽度，双击恢复默认"
+          onPointerDown={(event) => beginResize("detail", event)}
+          onPointerMove={(event) => moveResize("detail", event)}
+          onPointerUp={(event) => endResize("detail", event)}
+          onPointerCancel={(event) => endResize("detail", event)}
+          onKeyDown={(event) => resizeWithKeyboard("detail", event)}
+          onDoubleClick={() => setDetailWidth(DEFAULT_DETAIL_WIDTH)}
+        />
 
         <aside className={`detail-panel${detailOpen ? " is-open" : ""}`} aria-label="连接详情">
           {!focusedEntry || !currentSource ? (

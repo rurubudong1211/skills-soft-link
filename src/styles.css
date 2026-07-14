@@ -76,7 +76,4 @@ button:disabled {
     display: none;
   }
 
-  .workspace {
-    grid-template-columns: 206px minmax(500px, 1fr);
-  }
 }
