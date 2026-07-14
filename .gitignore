@@ -5,3 +5,6 @@ src-tauri/target/
 *.log
 .DS_Store
 .idea
+PRODUCT.md
+CONTEXT.md
+DESIGN.md

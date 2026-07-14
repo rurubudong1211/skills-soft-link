@@ -2,6 +2,11 @@
 
 > 在 Windows 上集中登记多个 Skills 源目录，并通过 NTFS Junction 将一级子目录分发到 Codex、Agents 或其他本机目标目录，无需复制和重复维护文件。
 
+[![Version](https://img.shields.io/badge/version-0.1.0-2563eb)](package.json)
+[![Platform](https://img.shields.io/badge/platform-Windows-0078d4)](https://www.microsoft.com/windows)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24c8db)](https://tauri.app/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 适合同时维护个人 Skills、项目 Skills 和实验目录的 Windows 用户。当前版本为 `v0.1.0`，提供可运行的桌面端 MVP；暂未发布预编译安装包，可直接从源码启动：
 
 ```powershell
@@ -158,4 +163,4 @@ src-tauri/target/release/bundle/nsis/
 
 ## License
 
-待补充。当前仓库尚未包含开源许可证；在许可证明确前，请勿默认将源码用于再分发或商业用途。
+本项目基于 [MIT License](LICENSE) 开源。
