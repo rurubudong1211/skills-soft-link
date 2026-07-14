@@ -155,6 +155,9 @@ export default function App() {
   const [results, setResults] = useState<LinkResult[] | null>(null);
   const [browseTargetOpen, setBrowseTargetOpen] = useState(false);
   const [newTargetPath, setNewTargetPath] = useState("");
+  const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
+  const [targetNameDraft, setTargetNameDraft] = useState("");
+  const [savingTargetName, setSavingTargetName] = useState(false);
   const [toasts, setToasts] = useState<Array<{ id: number; message: string; tone: "default" | "danger" }>>([]);
   const [sourcesWidth, setSourcesWidth] = useState(() =>
     readPanelWidth("skills-soft-link:sources-width", DEFAULT_SOURCES_WIDTH, MIN_SOURCES_WIDTH, MAX_SOURCES_WIDTH),
@@ -282,7 +285,14 @@ export default function App() {
     async (source: SourceSummary, announce = false) => {
       setRefreshing(true);
       try {
-        const nextScan = await api.scanSource(source.path);
+        const scanned = await api.scanSource(source.path);
+        const nextScan = {
+          ...scanned,
+          entries: scanned.entries.map((entry) => ({
+            ...entry,
+            connections: entry.connections.filter((connection) => connection.available),
+          })),
+        };
         setScan(nextScan);
         setLastScan(formatTime());
         setFocusedId((current) => {
@@ -370,6 +380,7 @@ export default function App() {
   const allSelected = selectableEntries.length > 0 && selectableEntries.every((entry) => selected.has(entry.id));
   const someSelected = selectableEntries.some((entry) => selected.has(entry.id));
   const focusedEntry = scan?.entries.find((entry) => entry.id === focusedId) ?? null;
+  const availableTargets = useMemo(() => targets.filter((target) => target.available), [targets]);
 
   useEffect(() => {
     if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected && !allSelected;
@@ -527,6 +538,8 @@ export default function App() {
     setResults(null);
     setBrowseTargetOpen(false);
     setNewTargetPath("");
+    setEditingTargetId(null);
+    setTargetNameDraft("");
     setDistributionOpen(true);
   };
 
@@ -534,6 +547,8 @@ export default function App() {
     if (creatingLinks) return;
     setDistributionOpen(false);
     setResults(null);
+    setEditingTargetId(null);
+    setTargetNameDraft("");
   };
 
   const browseTarget = async () => {
@@ -567,6 +582,51 @@ export default function App() {
       showToast("已忘记目标路径；目录和现有软链接保持不变");
     } catch (error) {
       showToast(errorText(error), "danger");
+    }
+  };
+
+  const beginRenameTarget = (target: TargetSummary) => {
+    setEditingTargetId(target.id);
+    setTargetNameDraft(target.name);
+  };
+
+  const cancelRenameTarget = () => {
+    if (savingTargetName) return;
+    setEditingTargetId(null);
+    setTargetNameDraft("");
+  };
+
+  const renameTarget = async (event: FormEvent, target: TargetSummary) => {
+    event.preventDefault();
+    const nextName = targetNameDraft.trim();
+    if (!nextName) {
+      showToast("目标目录名称不能为空", "danger");
+      return;
+    }
+    if (nextName === target.name) {
+      cancelRenameTarget();
+      return;
+    }
+    setSavingTargetName(true);
+    try {
+      const renamed = await api.renameTarget(target.path, nextName);
+      setTargets((items) => items.map((item) => item.id === target.id ? renamed : item));
+      setScan((current) => current ? {
+        ...current,
+        entries: current.entries.map((entry) => ({
+          ...entry,
+          connections: entry.connections.map((connection) =>
+            connection.path === target.path ? { ...connection, name: renamed.name } : connection,
+          ),
+        })),
+      } : current);
+      setEditingTargetId(null);
+      setTargetNameDraft("");
+      showToast(`已将目标目录显示名称改为“${renamed.name}”；磁盘路径和现有软链接保持不变`);
+    } catch (error) {
+      showToast(errorText(error), "danger");
+    } finally {
+      setSavingTargetName(false);
     }
   };
 
@@ -884,8 +944,8 @@ export default function App() {
                             }
                           }}
                         >
-                          <span className="connection-path">{connection.path}</span>
-                          <span className="connection-meta"><span className={`status-dot ${connection.available ? "status-dot--connected" : "status-dot--neutral"}`} aria-hidden="true" />{connection.available ? "可访问" : "目标不可用"}</span>
+                          <span className="target-name">{connection.name}</span>
+                          <span className="target-path">{connection.path}</span>
                         </div>
                         <button className="remove-link-button" type="button" aria-label={`移除位于 ${connection.path} 的软链接`} onClick={() => void removeConnection(connection.linkPath)}>移除软链接</button>
                       </div>
@@ -934,14 +994,45 @@ export default function App() {
               <div className="dialog-body">
                 <div className="target-section-title"><span>最近使用</span><span>用于发现现有软链接</span></div>
                 <div className="target-list">
-                  {targets.length === 0 ? <div className="empty-state compact-empty"><p>还没有最近使用的目标目录。</p></div> : targets.map((target) => (
-                    <div className={`target-row${target.path === targetPath ? " is-selected" : ""}${!target.available ? " is-unavailable" : ""}`} key={target.id}>
-                      <label className="target-radio"><input type="radio" name="targetDirectory" value={target.path} checked={target.path === targetPath} disabled={!target.available} onChange={() => setTargetPath(target.path)} aria-label={`选择 ${target.name}`} /></label>
-                      <label className="target-copy">
-                        <span className="target-name">{target.name}{!target.available ? " · 不可用" : ""}</span>
-                        <span className="target-path" title={target.path}>{target.path}</span>
-                      </label>
-                      <button className="forget-target-button" type="button" onClick={() => void forgetTarget(target.path)}>忘记</button>
+                  {availableTargets.length === 0 ? <div className="empty-state compact-empty"><p>还没有最近使用的目标目录。</p></div> : availableTargets.map((target) => (
+                    <div className={`target-row${target.path === targetPath ? " is-selected" : ""}${editingTargetId === target.id ? " is-editing" : ""}`} key={target.id}>
+                      {editingTargetId === target.id ? (
+                        <form className="target-rename-form" onSubmit={(event) => void renameTarget(event, target)}>
+                          <span className="target-rename-placeholder" aria-hidden="true" />
+                          <label className="target-rename-field">
+                            <span className="visually-hidden">目标目录显示名称</span>
+                            <input
+                              autoFocus
+                              maxLength={80}
+                              value={targetNameDraft}
+                              disabled={savingTargetName}
+                              onChange={(event) => setTargetNameDraft(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Escape") {
+                                  event.preventDefault();
+                                  cancelRenameTarget();
+                                }
+                              }}
+                            />
+                          </label>
+                          <div className="target-actions">
+                            <button className="target-action target-action--save" type="submit" disabled={savingTargetName} aria-label="保存目标目录名称" title="保存名称">✓</button>
+                            <button className="target-action" type="button" disabled={savingTargetName} aria-label="取消重命名目标目录" title="取消" onClick={cancelRenameTarget}>×</button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          <label className="target-radio"><input type="radio" name="targetDirectory" value={target.path} checked={target.path === targetPath} onChange={() => setTargetPath(target.path)} aria-label={`选择 ${target.name}`} /></label>
+                          <button className="target-copy" type="button" onClick={() => setTargetPath(target.path)} title={target.path}>
+                            <span className="target-name">{target.name}</span>
+                            <span className="target-path">{target.path}</span>
+                          </button>
+                          <div className="target-actions">
+                            <button className="target-action" type="button" aria-label={`修改 ${target.name} 的显示名称`} title="修改显示名称" onClick={() => beginRenameTarget(target)}>✎</button>
+                            <button className="forget-target-button" type="button" onClick={() => void forgetTarget(target.path)}>忘记</button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>

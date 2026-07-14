@@ -1094,21 +1094,6 @@ input[type="checkbox"] {
   outline-offset: 1px;
 }
 
-.connection-path {
-  display: block;
-  color: var(--ink-soft);
-  font-size: 11.5px;
-}
-
-.connection-meta {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-block-start: 3px;
-  color: var(--muted);
-  font-size: 10px;
-}
-
 .remove-link-button {
   min-height: 28px;
   padding: 4px 7px;
@@ -1324,10 +1309,6 @@ input[type="checkbox"] {
   background: var(--primary-softer);
 }
 
-.target-row.is-unavailable .target-path {
-  color: var(--muted);
-}
-
 .target-radio {
   display: grid;
   place-items: center;
@@ -1340,6 +1321,12 @@ input[type="checkbox"] {
 
 .target-copy {
   min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
 }
 
 .target-name {
@@ -1355,9 +1342,15 @@ input[type="checkbox"] {
   font-size: 10.5px;
 }
 
+.target-actions {
+  width: 60px;
+  display: flex;
+  align-items: center;
+}
+
+.target-action,
 .forget-target-button {
   min-height: 28px;
-  padding: 4px 7px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -1366,9 +1359,58 @@ input[type="checkbox"] {
   cursor: pointer;
 }
 
+.target-action {
+  width: 28px;
+  padding: 4px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+
+.target-action:hover {
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+
+.target-action--save:hover {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
 .forget-target-button:hover {
   background: var(--surface-strong);
   color: var(--ink);
+}
+
+.forget-target-button {
+  width: 32px;
+  padding: 4px 5px;
+}
+
+.target-rename-form {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 60px;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.target-rename-field {
+  min-width: 0;
+}
+
+.target-rename-field input {
+  width: 100%;
+  height: 27px;
+  padding: 3px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 620;
 }
 
 .browse-target-row {

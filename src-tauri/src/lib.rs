@@ -18,6 +18,8 @@ struct Settings {
     source_names: HashMap<String, String>,
     #[serde(default)]
     known_targets: Vec<String>,
+    #[serde(default)]
+    target_names: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -251,11 +253,14 @@ fn source_summary(path: &Path, custom_name: Option<&str>) -> SourceSummary {
     }
 }
 
-fn target_summary(path: &Path) -> TargetSummary {
+fn target_summary(path: &Path, custom_name: Option<&str>) -> TargetSummary {
     let path_text = display_path(path);
     TargetSummary {
         id: path_text.clone(),
-        name: name_for_path(path),
+        name: custom_name
+            .filter(|name| !name.trim().is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| name_for_path(path)),
         path: path_text,
         available: path.is_dir(),
     }
@@ -330,7 +335,11 @@ fn path_exists_without_following(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok()
 }
 
-fn make_connection(target: &Path, source_entry: &Path) -> Option<Connection> {
+fn make_connection(
+    target: &Path,
+    source_entry: &Path,
+    custom_target_name: Option<&str>,
+) -> Option<Connection> {
     let name = source_entry.file_name()?;
     let link = target.join(name);
     if !link_points_to(&link, source_entry) {
@@ -339,7 +348,10 @@ fn make_connection(target: &Path, source_entry: &Path) -> Option<Connection> {
     let target_text = display_path(target);
     Some(Connection {
         id: display_path(&link),
-        name: name_for_path(target),
+        name: custom_target_name
+            .filter(|name| !name.trim().is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| name_for_path(target)),
         path: target_text,
         link_path: display_path(&link),
         available: target.is_dir(),
@@ -430,7 +442,6 @@ fn remove_source(app: AppHandle, path: String) -> Result<(), String> {
 fn scan_source(app: AppHandle, path: String) -> Result<SourceScan, String> {
     let source_path = canonical_directory(&path)?;
     let settings = load_settings(&app)?;
-    let known_targets: Vec<PathBuf> = settings.known_targets.iter().map(PathBuf::from).collect();
 
     let directory =
         fs::read_dir(&source_path).map_err(|error| error_message("无法读取源目录", error))?;
@@ -444,9 +455,20 @@ fn scan_source(app: AppHandle, path: String) -> Result<SourceScan, String> {
             .map_err(|error| error_message("无法读取源条目信息", error))?;
         let is_directory = metadata.is_dir();
         let connections = if is_directory {
-            known_targets
+            settings
+                .known_targets
                 .iter()
-                .filter_map(|target| make_connection(target, &item_path))
+                .filter_map(|target_text| {
+                    let target = PathBuf::from(target_text);
+                    if !target.is_dir() {
+                        return None;
+                    }
+                    make_connection(
+                        &target,
+                        &item_path,
+                        settings.target_names.get(target_text).map(String::as_str),
+                    )
+                })
                 .collect()
         } else {
             Vec::new()
@@ -487,7 +509,14 @@ fn list_targets(app: AppHandle) -> Result<Vec<TargetSummary>, String> {
         .known_targets
         .iter()
         .map(PathBuf::from)
-        .map(|path| target_summary(&path))
+        .filter_map(|path| {
+            let path_text = display_path(&path);
+            let target = target_summary(
+                &path,
+                settings.target_names.get(&path_text).map(String::as_str),
+            );
+            target.available.then_some(target)
+        })
         .collect())
 }
 
@@ -504,7 +533,42 @@ fn add_target(app: AppHandle, path: String) -> Result<TargetSummary, String> {
         settings.known_targets.insert(0, display_path(&path));
         save_settings(&app, &settings)?;
     }
-    Ok(target_summary(&path))
+    let path_text = display_path(&path);
+    Ok(target_summary(
+        &path,
+        settings.target_names.get(&path_text).map(String::as_str),
+    ))
+}
+
+#[tauri::command]
+fn rename_target(app: AppHandle, path: String, name: String) -> Result<TargetSummary, String> {
+    let requested = PathBuf::from(path.trim());
+    if path.trim().is_empty() {
+        return Err("目标目录路径不能为空".into());
+    }
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("目标目录名称不能为空".into());
+    }
+    if name.chars().count() > 80 {
+        return Err("目标目录名称不能超过 80 个字符".into());
+    }
+    if name.chars().any(char::is_control) {
+        return Err("目标目录名称不能包含控制字符".into());
+    }
+
+    let mut settings = load_settings(&app)?;
+    let stored_path = settings
+        .known_targets
+        .iter()
+        .find(|existing| path_eq(&PathBuf::from(existing), &requested))
+        .cloned()
+        .ok_or_else(|| "该目标目录尚未登记".to_string())?;
+    settings
+        .target_names
+        .insert(stored_path.clone(), name.to_owned());
+    save_settings(&app, &settings)?;
+    Ok(target_summary(Path::new(&stored_path), Some(name)))
 }
 
 #[tauri::command]
@@ -514,6 +578,9 @@ fn forget_target(app: AppHandle, path: String) -> Result<(), String> {
     settings
         .known_targets
         .retain(|existing| !path_eq(&PathBuf::from(existing), &requested));
+    settings
+        .target_names
+        .retain(|existing, _| !path_eq(&PathBuf::from(existing), &requested));
     save_settings(&app, &settings)
 }
 
@@ -667,6 +734,7 @@ pub fn run() {
             scan_source,
             list_targets,
             add_target,
+            rename_target,
             forget_target,
             preflight_links,
             create_links,

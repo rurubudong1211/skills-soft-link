@@ -130,10 +130,16 @@ const webApi = {
     await wait(360);
     const source = mutableDemoSources.find((item) => item.path === path);
     if (!source) throw new Error("找不到源目录");
-    return { source, entries: [...(demoEntries.get(source.id) ?? [])] };
+    return {
+      source,
+      entries: (demoEntries.get(source.id) ?? []).map((entry) => ({
+        ...entry,
+        connections: entry.connections.filter((connection) => connection.available),
+      })),
+    };
   },
   async listTargets() {
-    return [...demoTargets];
+    return demoTargets.filter((target) => target.available);
   },
   async addTarget(path: string) {
     const existing = demoTargets.find((target) => target.path.toLocaleLowerCase() === path.toLocaleLowerCase());
@@ -144,6 +150,24 @@ const webApi = {
   },
   async forgetTarget(path: string) {
     demoTargets = demoTargets.filter((target) => target.path !== path);
+  },
+  async renameTarget(path: string, name: string) {
+    await wait(120);
+    const target = demoTargets.find((item) => item.path === path);
+    if (!target) throw new Error("找不到目标目录");
+    const trimmedName = name.trim();
+    if (!trimmedName) throw new Error("目标目录名称不能为空");
+    if (trimmedName.length > 80) throw new Error("目标目录名称不能超过 80 个字符");
+    const renamed = { ...target, name: trimmedName };
+    demoTargets = demoTargets.map((item) => item.id === target.id ? renamed : item);
+    for (const entries of demoEntries.values()) {
+      for (const entry of entries) {
+        entry.connections = entry.connections.map((connection) =>
+          connection.path === path ? { ...connection, name: trimmedName } : connection,
+        );
+      }
+    }
+    return renamed;
   },
   async preflightLinks(sourcePaths: string[], targetPath: string): Promise<PreflightItem[]> {
     await wait(120);
@@ -198,6 +222,8 @@ export const api = {
     isTauri() ? invoke("add_target", { path }) : webApi.addTarget(path),
   forgetTarget: (path: string): Promise<void> =>
     isTauri() ? invoke("forget_target", { path }) : webApi.forgetTarget(path),
+  renameTarget: (path: string, name: string): Promise<TargetSummary> =>
+    isTauri() ? invoke("rename_target", { path, name }) : webApi.renameTarget(path, name),
   preflightLinks: (sourcePaths: string[], targetPath: string): Promise<PreflightItem[]> =>
     isTauri()
       ? invoke("preflight_links", { sourcePaths, targetPath })
