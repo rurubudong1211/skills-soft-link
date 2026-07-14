@@ -2,12 +2,12 @@
 
 > 在 Windows 上集中登记多个 Skills 源目录，并通过 NTFS Junction 将一级子目录分发到 Codex、Agents 或其他本机目标目录，无需复制和重复维护文件。
 
-[![Version](https://img.shields.io/badge/version-0.1.0-2563eb)](package.json)
+[![Version](https://img.shields.io/badge/version-1.0.1-2563eb)](package.json)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078d4)](https://www.microsoft.com/windows)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24c8db)](https://tauri.app/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-适合同时维护个人 Skills、项目 Skills 和实验目录的 Windows 用户。当前版本为 `v0.1.0`，提供可运行的桌面端 MVP，并支持构建 MSI、NSIS 和便携版 ZIP 发布包；可直接从源码启动：
+适合同时维护个人 Skills、项目 Skills 和实验目录的 Windows 用户。当前版本为 `v1.0.1`，提供可运行的桌面端 MVP，并支持构建 MSI、NSIS 和便携版 ZIP 发布包；可直接从源码启动：
 
 ```powershell
 git clone https://github.com/rurubudong1211/skills-soft-link.git
@@ -150,9 +150,9 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 ```text
 src-tauri/target/release/bundle/
-├── msi/skills-soft-link_0.1.0_x64.msi
-├── nsis/skills-soft-link_0.1.0_x64-setup.exe
-└── portable/skills-soft-link_0.1.0_x64-Portable.zip
+├── msi/skills-soft-link_1.0.1_x64.msi
+├── nsis/skills-soft-link_1.0.1_x64-setup.exe
+└── portable/skills-soft-link_1.0.1_x64-Portable.zip
 ```
 
 ## 技术栈

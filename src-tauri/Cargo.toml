@@ -1,6 +1,6 @@
 [package]
 name = "skills-soft-link"
-version = "0.1.0"
+version = "1.0.1"
 description = "Skills 软链接管理器"
 authors = ["LX"]
 edition = "2021"
