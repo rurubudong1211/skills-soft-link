@@ -7,13 +7,13 @@
 [![Tauri](https://img.shields.io/badge/Tauri-2-24c8db)](https://tauri.app/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-适合同时维护个人 Skills、项目 Skills 和实验目录的 Windows 用户。当前版本为 `v0.1.0`，提供可运行的桌面端 MVP；暂未发布预编译安装包，可直接从源码启动：
+适合同时维护个人 Skills、项目 Skills 和实验目录的 Windows 用户。当前版本为 `v0.1.0`，提供可运行的桌面端 MVP，并支持构建 MSI、NSIS 和便携版 ZIP 发布包；可直接从源码启动：
 
 ```powershell
 git clone https://github.com/rurubudong1211/skills-soft-link.git
 cd skills-soft-link
 npm ci
-npm run tauri dev
+npm run dev
 ```
 
 ## 项目亮点
@@ -58,7 +58,7 @@ cargo --version
 
 ```powershell
 npm ci
-npm run tauri dev
+npm run dev
 ```
 
 桌面模式会读取本机目录，并能够创建或移除 Junction。
@@ -66,7 +66,7 @@ npm run tauri dev
 ### 只预览界面
 
 ```powershell
-npm run dev
+npm run dev:renderer
 ```
 
 浏览器模式使用内置演示数据，不会读取或修改本机文件系统，适合调试 React 界面和交互。
@@ -113,8 +113,10 @@ skills-soft-link/
 │   ├── src/lib.rs              # 目录扫描、配置持久化与 Junction 操作
 │   ├── capabilities/           # Tauri 窗口权限
 │   ├── icons/                  # 桌面与安装包图标
+│   ├── wix/                    # 中文 MSI 本地化资源
 │   ├── Cargo.toml              # Rust 依赖与包信息
-│   └── tauri.conf.json         # 窗口、构建与 NSIS 打包配置
+│   └── tauri.conf.json         # 窗口、构建与 Windows 打包配置
+├── scripts/                    # MSI 命名规范化与便携版打包脚本
 ├── docs/prototype-brief.md     # 原型设计说明
 ├── CONTEXT.md                  # 领域术语与行为边界
 ├── DESIGN.md                   # 视觉设计规范
@@ -127,12 +129,14 @@ skills-soft-link/
 
 | 命令 | 用途 |
 | --- | --- |
-| `npm run dev` | 启动带演示数据的浏览器预览 |
-| `npm run tauri dev` | 启动可访问本机文件系统的桌面开发版 |
+| `npm run dev` | 启动可访问本机文件系统的桌面开发版 |
+| `npm run dev:renderer` | 仅启动 Vite 浏览器预览 |
 | `npm run check` | 执行 TypeScript 类型检查 |
-| `npm run build` | 构建前端生产资源 |
+| `npm run build:renderer` | 构建前端生产资源 |
+| `npm run tauri:build` | 构建 MSI 与 NSIS 安装包 |
+| `npm run package:windows` | 规范化 MSI、NSIS 命名并生成便携版 ZIP |
+| `npm run build` | 完整发布构建：MSI、NSIS 安装包与便携版 ZIP |
 | `cargo test --manifest-path src-tauri/Cargo.toml` | 运行 Rust 测试 |
-| `npm run tauri build` | 构建 Windows NSIS 安装包 |
 
 完整检查：
 
@@ -142,10 +146,13 @@ npm run build
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-桌面安装包构建完成后位于：
+完整发布构建完成后，Windows 产物位于：
 
 ```text
-src-tauri/target/release/bundle/nsis/
+src-tauri/target/release/bundle/
+├── msi/skills-soft-link_0.1.0_x64.msi
+├── nsis/skills-soft-link_0.1.0_x64-setup.exe
+└── portable/skills-soft-link_0.1.0_x64-Portable.zip
 ```
 
 ## 技术栈
