@@ -19,3 +19,15 @@ npm run dev
 # 打包
 npm run build
 ```
+
+## 版本发布
+
+在项目根目录执行以下命令，可递增补丁版本号、同步 Tauri 与 Rust 的版本号并打包：
+
+```powershell
+npm version patch --no-git-tag-version
+
+node -e 'const fs=require("fs"); const version=require("./package.json").version; const configPath="src-tauri/tauri.conf.json"; const config=JSON.parse(fs.readFileSync(configPath,"utf8").replace(/^\uFEFF/,"")); config.version=version; fs.writeFileSync(configPath,JSON.stringify(config,null,2)+"\n","utf8"); const cargoPath="src-tauri/Cargo.toml"; let cargo=fs.readFileSync(cargoPath,"utf8").replace(/^\uFEFF/,""); cargo=cargo.replace(/^version\s*=\s*"[^"]+"/m,`version = "${version}"`); fs.writeFileSync(cargoPath,cargo,"utf8"); console.log(`版本已同步为 ${version}`);'
+
+npm run build
+```
